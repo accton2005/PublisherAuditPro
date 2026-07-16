@@ -147,6 +147,32 @@ function saveConfig(config: any) {
 
 let appConfig = loadConfig();
 
+const BLOG_PATH = path.join(process.cwd(), "blog_posts.json");
+
+function loadBlogPosts() {
+  try {
+    if (fs.existsSync(BLOG_PATH)) {
+      const data = fs.readFileSync(BLOG_PATH, "utf-8");
+      return JSON.parse(data);
+    }
+  } catch (err) {
+    console.error("Failed to read blog_posts.json:", err);
+  }
+  return [];
+}
+
+function saveBlogPosts(posts: any[]) {
+  try {
+    fs.writeFileSync(BLOG_PATH, JSON.stringify(posts, null, 2), "utf-8");
+    return true;
+  } catch (err) {
+    console.error("Failed to write blog_posts.json:", err);
+    return false;
+  }
+}
+
+let blogPosts = loadBlogPosts();
+
 // Standard in-memory store for session persistence
 const scanHistory: AuditReport[] = [];
 const apiLogs: any[] = [];
@@ -739,6 +765,196 @@ Sitemap: https://${domain || "yoursite.com"}/sitemap.xml`;
   // API Route: Get developer playground logs
   app.get("/api/logs", (req: any, res: any) => {
     res.json(apiLogs);
+  });
+
+  // API Route: Get all blog posts
+  app.get("/api/blog", (req: any, res: any) => {
+    res.json(blogPosts);
+  });
+
+  // API Route: Create a new blog post (Secure admin panel)
+  app.post("/api/blog", (req: any, res: any) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || authHeader !== "Bearer secure-admin-session-token-2026") {
+      return res.status(403).json({ error: "Non autorisé." });
+    }
+
+    const { title, summary, content, category, readTime, tags, published, author } = req.body;
+    if (!title || !content) {
+      return res.status(400).json({ error: "Le titre et le contenu sont obligatoires." });
+    }
+
+    // Helper to generate slug from title
+    const slug = title
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-");
+
+    const newPost = {
+      id: `post-${Date.now()}`,
+      title,
+      slug,
+      summary: summary || title.slice(0, 100) + "...",
+      content,
+      author: author || "Admin",
+      date: new Date().toISOString().split("T")[0],
+      category: category || "SEO",
+      readTime: readTime || "5 min",
+      tags: tags || [category || "SEO"],
+      published: published !== undefined ? published : true
+    };
+
+    blogPosts.unshift(newPost);
+    saveBlogPosts(blogPosts);
+    logApiCall("POST", "/api/blog", 200, title);
+
+    res.status(201).json({ success: true, post: newPost });
+  });
+
+  // API Route: Update an existing blog post (Secure admin panel)
+  app.put("/api/blog", (req: any, res: any) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || authHeader !== "Bearer secure-admin-session-token-2026") {
+      return res.status(403).json({ error: "Non autorisé." });
+    }
+
+    const { id, title, summary, content, category, readTime, tags, published, author } = req.body;
+    if (!id) {
+      return res.status(400).json({ error: "L'identifiant (ID) est requis pour la modification." });
+    }
+
+    const postIndex = blogPosts.findIndex((p: any) => p.id === id);
+    if (postIndex === -1) {
+      return res.status(404).json({ error: "Article introuvable." });
+    }
+
+    const updatedPost = {
+      ...blogPosts[postIndex],
+      ...(title && { title }),
+      ...(title && { slug: title.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-") }),
+      ...(summary !== undefined && { summary }),
+      ...(content && { content }),
+      ...(category && { category }),
+      ...(readTime && { readTime }),
+      ...(tags && { tags }),
+      ...(published !== undefined && { published }),
+      ...(author && { author })
+    };
+
+    blogPosts[postIndex] = updatedPost;
+    saveBlogPosts(blogPosts);
+    logApiCall("PUT", `/api/blog`, 200, updatedPost.title);
+
+    res.json({ success: true, post: updatedPost });
+  });
+
+  // API Route: Delete a blog post (Secure admin panel)
+  app.post("/api/blog/delete", (req: any, res: any) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || authHeader !== "Bearer secure-admin-session-token-2026") {
+      return res.status(403).json({ error: "Non autorisé." });
+    }
+
+    const { id } = req.body;
+    if (!id) {
+      return res.status(400).json({ error: "L'identifiant (ID) est requis pour la suppression." });
+    }
+
+    const postIndex = blogPosts.findIndex((p: any) => p.id === id);
+    if (postIndex === -1) {
+      return res.status(404).json({ error: "Article introuvable." });
+    }
+
+    const deletedTitle = blogPosts[postIndex].title;
+    blogPosts.splice(postIndex, 1);
+    saveBlogPosts(blogPosts);
+    logApiCall("POST", `/api/blog/delete`, 200, deletedTitle);
+
+    res.json({ success: true, message: "Article supprimé avec succès." });
+  });
+
+  // API Route: Generate Blog Post using Gemini (Secure admin panel)
+  app.post("/api/blog/generate", async (req: any, res: any) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || authHeader !== "Bearer secure-admin-session-token-2026") {
+      return res.status(403).json({ error: "Non autorisé." });
+    }
+
+    const { topic, category } = req.body;
+    if (!topic) {
+      return res.status(400).json({ error: "Le sujet est obligatoire." });
+    }
+
+    const ai = getGemini();
+    if (ai) {
+      try {
+        const prompt = `Génère un article de blog SEO professionnel et approfondi en français sur le sujet : "${topic}".
+        Catégorie : "${category || "SEO"}".
+        Format de retour obligatoire en JSON brut :
+        {
+          "title": "Un titre accrocheur optimisé pour le SEO",
+          "summary": "Un extrait court de 2 phrases",
+          "content": "Le contenu complet de l'article en HTML propre et sémantique avec des balises <h3>, <p>, <ul>/<li>, <strong>, <code>, etc. Au moins 3 sections détaillées.",
+          "readTime": "6 min",
+          "tags": ["Tag1", "Tag2", "Tag3"]
+        }
+        Ne mets pas de balises de code markdown comme \`\`\`json ou similaires, réponds uniquement avec le JSON valide brut.`;
+
+        const aiResponse = await ai.models.generateContent({
+          model: "gemini-3.5-flash",
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                summary: { type: Type.STRING },
+                content: { type: Type.STRING },
+                readTime: { type: Type.STRING },
+                tags: { type: Type.ARRAY, items: { type: Type.STRING } }
+              },
+              required: ["title", "summary", "content", "readTime", "tags"]
+            }
+          }
+        });
+
+        if (aiResponse.text) {
+          const parsed = JSON.parse(aiResponse.text.trim());
+          return res.json(parsed);
+        }
+      } catch (err) {
+        console.error("Failed to generate blog post with Gemini:", err);
+      }
+    }
+
+    // Fallback if Gemini key is missing or failed
+    const fallbackTitle = `Guide Pratique : Comment optimiser le sujet "${topic}"`;
+    const fallbackSummary = `Un guide complet expliquant étape par étape comment aborder et maîtriser "${topic}" pour booster la visibilité de votre site.`;
+    const fallbackContent = `
+      <p>L'optimisation pour le sujet <strong>"${topic}"</strong> est aujourd'hui une étape critique pour tous les éditeurs de sites web modernes qui cherchent à maximiser leur visibilité sur les moteurs de recherche et augmenter leurs revenus publicitaires.</p>
+      <h3>Pourquoi est-ce crucial aujourd'hui ?</h3>
+      <p>Les algorithmes des moteurs de recherche évoluent constamment. Traiter le sujet "${topic}" de manière qualitative permet d'apporter des réponses claires aux utilisateurs tout en améliorant votre autorité thématique générale.</p>
+      <h3>Les 3 règles d'or pour réussir</h3>
+      <ul>
+        <li><strong>Règle 1 : La clarté avant tout</strong> - Rédigez un contenu accessible, structuré et facile à lire.</li>
+        <li><strong>Règle 2 : L'autorité technique</strong> - Assurez-vous que votre site se charge rapidement et dispose de toutes les balises sémantiques indispensables.</li>
+        <li><strong>Règle 3 : L'expérience utilisateur</strong> - Réduisez le Cumulative Layout Shift (CLS) et soignez le design pour limiter le taux de rebond.</li>
+      </ul>
+      <h3>Conclusion</h3>
+      <p>En mettant en pratique ces conseils simples, vous positionnerez votre domaine comme une référence solide sur le sujet et augmenterez significativement vos chances d'approbation AdSense.</p>
+    `;
+
+    res.json({
+      title: fallbackTitle,
+      summary: fallbackSummary,
+      content: fallbackContent,
+      readTime: "5 min",
+      tags: [category || "SEO", "Optimisation", "Guide"]
+    });
   });
 
   // Vite development vs production setup

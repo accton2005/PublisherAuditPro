@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { 
   ShieldCheck, Lock, LogOut, CheckCircle2, Save, Terminal, 
   Trash2, Database, ToggleLeft, ToggleRight, Settings, 
-  Layers, FileText, CreditCard, AlertTriangle, RefreshCw
+  Layers, FileText, CreditCard, AlertTriangle, RefreshCw,
+  BookOpen, PlusCircle, Edit, Sparkles, Plus, Calendar, Clock
 } from "lucide-react";
 
 interface AdminPanelProps {
@@ -17,8 +18,40 @@ export default function AdminPanel({ onConfigUpdated, lang }: AdminPanelProps) {
   const [passwordInput, setPasswordInput] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<"modules" | "pages" | "pricing" | "rules" | "history" | "security" | "logs" | "payments">("modules");
+  const [activeSubTab, setActiveSubTab] = useState<"modules" | "pages" | "pricing" | "rules" | "history" | "security" | "logs" | "payments" | "blog">("modules");
   
+  // Blog management states
+  const [blogPosts, setBlogPosts] = useState<any[]>([]);
+  const [loadingBlog, setLoadingBlog] = useState(false);
+  const [blogEditorOpen, setBlogEditorOpen] = useState(false);
+  const [blogEditPost, setBlogEditPost] = useState<any | null>(null); // Null means creating
+  const [blogFormTitle, setBlogFormTitle] = useState("");
+  const [blogFormSummary, setBlogFormSummary] = useState("");
+  const [blogFormContent, setBlogFormContent] = useState("");
+  const [blogFormCategory, setBlogFormCategory] = useState("SEO");
+  const [blogFormReadTime, setBlogFormReadTime] = useState("5 min");
+  const [blogFormTags, setBlogFormTags] = useState("");
+  const [blogFormAuthor, setBlogFormAuthor] = useState("Admin");
+  const [blogFormPublished, setBlogFormPublished] = useState(true);
+  const [blogAiTopic, setBlogAiTopic] = useState("");
+  const [blogAiGenerating, setBlogAiGenerating] = useState(false);
+  const [blogAiError, setBlogAiError] = useState("");
+
+  const fetchBlogPosts = async () => {
+    setLoadingBlog(true);
+    try {
+      const res = await fetch("/api/blog");
+      if (res.ok) {
+        const data = await res.json();
+        setBlogPosts(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch blog posts:", err);
+    } finally {
+      setLoadingBlog(false);
+    }
+  };
+
   // Loaded Config State
   const [adminConfig, setAdminConfig] = useState<any>(null);
   const [saving, setSaving] = useState(false);
@@ -93,6 +126,9 @@ export default function AdminPanel({ onConfigUpdated, lang }: AdminPanelProps) {
     if (isLoggedIn) {
       fetchCurrentConfig();
       fetchLogsAndHistory();
+      if (activeSubTab === "blog") {
+        fetchBlogPosts();
+      }
     }
   }, [isLoggedIn, activeSubTab]);
 
@@ -385,6 +421,168 @@ export default function AdminPanel({ onConfigUpdated, lang }: AdminPanelProps) {
     }
   };
 
+  // Blog Action Handlers
+  const handleSaveBlogPost = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setSaveError("");
+    setSaveSuccess(false);
+
+    try {
+      const payload = {
+        id: blogEditPost?.id,
+        title: blogFormTitle,
+        summary: blogFormSummary,
+        content: blogFormContent,
+        category: blogFormCategory,
+        readTime: blogFormReadTime,
+        tags: blogFormTags.split(",").map((t: string) => t.trim()).filter(Boolean),
+        published: blogFormPublished,
+        author: blogFormAuthor
+      };
+
+      const endpoint = "/api/blog";
+      const method = blogEditPost ? "PUT" : "POST";
+
+      const res = await fetch(endpoint, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        setSaveSuccess(true);
+        setBlogEditorOpen(false);
+        setBlogEditPost(null);
+        fetchBlogPosts();
+        setTimeout(() => setSaveSuccess(false), 3000);
+      } else {
+        const errData = await res.json();
+        setSaveError(errData.error || "Erreur de sauvegarde de l'article.");
+      }
+    } catch (err) {
+      setSaveError("Impossible de communiquer avec le serveur pour sauvegarder l'article.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteBlogPost = async (id: string) => {
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer définitivement cet article de blog ?")) return;
+    try {
+      const res = await fetch("/api/blog/delete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ id })
+      });
+      if (res.ok) {
+        fetchBlogPosts();
+      } else {
+        alert("Erreur lors de la suppression de l'article.");
+      }
+    } catch (err) {
+      console.error("Failed to delete blog post:", err);
+    }
+  };
+
+  const handleToggleBlogPostPublish = async (post: any) => {
+    try {
+      const res = await fetch("/api/blog", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          id: post.id,
+          published: !post.published
+        })
+      });
+      if (res.ok) {
+        fetchBlogPosts();
+      }
+    } catch (err) {
+      console.error("Failed to toggle publish status:", err);
+    }
+  };
+
+  const handleOpenCreateBlog = () => {
+    setBlogEditPost(null);
+    setBlogFormTitle("");
+    setBlogFormSummary("");
+    setBlogFormContent("");
+    setBlogFormCategory("SEO");
+    setBlogFormReadTime("5 min");
+    setBlogFormTags("SEO, Optimisation");
+    setBlogFormAuthor("Admin");
+    setBlogFormPublished(true);
+    setBlogEditorOpen(true);
+    setBlogAiTopic("");
+    setBlogAiError("");
+  };
+
+  const handleOpenEditBlog = (post: any) => {
+    setBlogEditPost(post);
+    setBlogFormTitle(post.title);
+    setBlogFormSummary(post.summary);
+    setBlogFormContent(post.content);
+    setBlogFormCategory(post.category);
+    setBlogFormReadTime(post.readTime);
+    setBlogFormTags(post.tags.join(", "));
+    setBlogFormAuthor(post.author);
+    setBlogFormPublished(post.published);
+    setBlogEditorOpen(true);
+    setBlogAiTopic("");
+    setBlogAiError("");
+  };
+
+  const handleGenerateAiBlog = async () => {
+    if (!blogAiTopic.trim()) {
+      setBlogAiError("Veuillez saisir un sujet de rédaction.");
+      return;
+    }
+    setBlogAiGenerating(true);
+    setBlogAiError("");
+
+    try {
+      const res = await fetch("/api/blog/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          topic: blogAiTopic,
+          category: blogFormCategory
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setBlogFormTitle(data.title || "");
+        setBlogFormSummary(data.summary || "");
+        setBlogFormContent(data.content || "");
+        setBlogFormReadTime(data.readTime || "5 min");
+        if (data.tags) {
+          setBlogFormTags(data.tags.join(", "));
+        }
+      } else {
+        const errData = await res.json();
+        setBlogAiError(errData.error || "Échec de la génération par l'IA.");
+      }
+    } catch (err) {
+      setBlogAiError("Erreur lors de la communication avec l'API d'intelligence artificielle.");
+    } finally {
+      setBlogAiGenerating(false);
+    }
+  };
+
   // Toggle Module
   const handleToggleModule = (moduleKey: string) => {
     setAdminConfig({
@@ -569,6 +767,16 @@ export default function AdminPanel({ onConfigUpdated, lang }: AdminPanelProps) {
           >
             <FileText className="w-4 h-4" />
             <span>Pages & Contenus CMS</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab("blog")}
+            className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition cursor-pointer ${
+              activeSubTab === "blog" ? "bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400" : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900"
+            }`}
+          >
+            <BookOpen className="w-4 h-4 text-indigo-500" />
+            <span>Gestion du Blog (SEO)</span>
           </button>
 
           <button
@@ -1444,6 +1652,280 @@ export default function AdminPanel({ onConfigUpdated, lang }: AdminPanelProps) {
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* BLOG MANAGEMENT MODULE */}
+          {activeSubTab === "blog" && (
+            <div className="space-y-6" id="admin-blog-manager">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <BookOpen className="w-5 h-5 text-indigo-500" />
+                    <span>Gestion du Blog SEO & Académie</span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Ajoutez et gérez les articles du blog, ou générez du contenu optimisé avec l'IA.
+                  </p>
+                </div>
+                {!blogEditorOpen && (
+                  <button
+                    onClick={handleOpenCreateBlog}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow transition"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    <span>Rédiger un article</span>
+                  </button>
+                )}
+              </div>
+
+              {blogEditorOpen ? (
+                /* CREATE / EDIT ARTICLE FORM */
+                <form onSubmit={handleSaveBlogPost} className="bg-slate-50 dark:bg-slate-950/20 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-6">
+                  
+                  {/* AI Content Generation Assistant Widget */}
+                  <div className="bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 p-4 rounded-xl space-y-3">
+                    <h4 className="text-xs font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5 uppercase tracking-wider">
+                      <Sparkles className="w-4 h-4 text-indigo-500 animate-pulse" />
+                      <span>Rédacteur Assistant IA (Gemini)</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-400">
+                      Entrez un sujet ou mot-clé en français (ex: "Comment optimiser sa vitesse de chargement sur mobile") et laissez l'IA générer un article optimisé de qualité professionnelle.
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Sujet de l'article..."
+                        value={blogAiTopic}
+                        onChange={(e) => setBlogAiTopic(e.target.value)}
+                        className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-indigo-500 outline-none dark:text-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleGenerateAiBlog}
+                        disabled={blogAiGenerating}
+                        className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-300 text-white font-bold px-4 py-2 rounded-xl text-xs whitespace-nowrap cursor-pointer transition flex items-center gap-1.5"
+                      >
+                        {blogAiGenerating ? "Génération..." : "Générer avec l'IA"}
+                      </button>
+                    </div>
+                    {blogAiError && (
+                      <p className="text-[10px] text-rose-500 font-medium">{blogAiError}</p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 dark:text-slate-400">Titre de l'article</label>
+                      <input
+                        type="text"
+                        required
+                        value={blogFormTitle}
+                        onChange={(e) => setBlogFormTitle(e.target.value)}
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-medium dark:text-white outline-none"
+                        placeholder="ex: Comment optimiser votre fichier ads.txt"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 dark:text-slate-400">Auteur</label>
+                      <input
+                        type="text"
+                        required
+                        value={blogFormAuthor}
+                        onChange={(e) => setBlogFormAuthor(e.target.value)}
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-medium dark:text-white outline-none"
+                        placeholder="ex: Admin"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 dark:text-slate-400">Catégorie</label>
+                      <select
+                        value={blogFormCategory}
+                        onChange={(e) => setBlogFormCategory(e.target.value)}
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-medium dark:text-white outline-none"
+                      >
+                        <option value="AdSense">Monétisation AdSense</option>
+                        <option value="SEO">Référencement SEO</option>
+                        <option value="Performances">Performances Web</option>
+                        <option value="Sécurité">Sécurité Web</option>
+                        <option value="Légal">Conformité Légale</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 dark:text-slate-400">Temps de lecture</label>
+                      <input
+                        type="text"
+                        value={blogFormReadTime}
+                        onChange={(e) => setBlogFormReadTime(e.target.value)}
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-medium dark:text-white outline-none"
+                        placeholder="ex: 5 min"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 dark:text-slate-400">Tags (séparés par des virgules)</label>
+                      <input
+                        type="text"
+                        value={blogFormTags}
+                        onChange={(e) => setBlogFormTags(e.target.value)}
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-medium dark:text-white outline-none"
+                        placeholder="ex: AdSense, ads.txt, Tuto"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400">Résumé court (extrait)</label>
+                    <textarea
+                      rows={2}
+                      value={blogFormSummary}
+                      onChange={(e) => setBlogFormSummary(e.target.value)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-medium dark:text-white outline-none"
+                      placeholder="Un résumé accrocheur affiché dans la liste des articles..."
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400">Contenu de l'article (Format HTML propre)</label>
+                    <textarea
+                      rows={12}
+                      required
+                      value={blogFormContent}
+                      onChange={(e) => setBlogFormContent(e.target.value)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-mono dark:text-white outline-none leading-relaxed"
+                      placeholder="<p>Rédigez ou collez votre code HTML ici...</p><h3>Section</h3><ul><li>Point important</li></ul>"
+                    />
+                    <span className="text-[10px] text-slate-400 font-mono">Conseil: Utilisez des balises standard comme &lt;p&gt;, &lt;h3&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;strong&gt;, &lt;code&gt; pour une mise en page sémantique élégante.</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="blogFormPublished"
+                      checked={blogFormPublished}
+                      onChange={(e) => setBlogFormPublished(e.target.checked)}
+                      className="rounded text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <label htmlFor="blogFormPublished" className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Publier immédiatement cet article sur le site public
+                    </label>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-4 border-t border-slate-200 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setBlogEditorOpen(false)}
+                      className="bg-white hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold px-4 py-2 rounded-xl cursor-pointer transition"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-5 py-2 rounded-xl cursor-pointer transition flex items-center gap-1.5"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>{saving ? "Sauvegarde..." : "Enregistrer l'article"}</span>
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                /* ARTICLES LIST TABLE */
+                <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm bg-white dark:bg-slate-900">
+                  {loadingBlog ? (
+                    <div className="text-center py-16 space-y-3">
+                      <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                      <p className="text-xs text-slate-400">Chargement de la base d'articles...</p>
+                    </div>
+                  ) : blogPosts.length === 0 ? (
+                    <div className="text-center py-16 space-y-2">
+                      <BookOpen className="w-12 h-12 text-slate-300 dark:text-slate-750 mx-auto" />
+                      <p className="text-xs text-slate-400 italic">Aucun article enregistré dans la base de données.</p>
+                      <button
+                        onClick={handleOpenCreateBlog}
+                        className="mt-2 text-xs font-bold text-indigo-500 hover:underline cursor-pointer"
+                      >
+                        Créer le tout premier article
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 dark:bg-slate-950/80 text-slate-400 font-mono uppercase text-[9px] border-b border-slate-150 dark:border-slate-850">
+                          <tr>
+                            <th className="p-4">Titre / Sujet</th>
+                            <th className="p-4">Catégorie</th>
+                            <th className="p-4">Auteur</th>
+                            <th className="p-4">Date de publication</th>
+                            <th className="p-4 text-center">Statut</th>
+                            <th className="p-4 text-center">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                          {blogPosts.map((post) => (
+                            <tr key={post.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/40 transition">
+                              <td className="p-4 font-bold max-w-xs truncate">
+                                <span className="block text-slate-900 dark:text-white truncate" title={post.title}>
+                                  {post.title}
+                                </span>
+                                <span className="block text-[10px] text-slate-400 font-mono truncate">
+                                  /{post.slug}
+                                </span>
+                              </td>
+                              <td className="p-4">
+                                <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-[10px] rounded-md font-medium text-slate-600 dark:text-slate-400">
+                                  {post.category}
+                                </span>
+                              </td>
+                              <td className="p-4 text-slate-500">{post.author}</td>
+                              <td className="p-4 font-mono text-slate-500">{post.date}</td>
+                              <td className="p-4 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleBlogPostPublish(post)}
+                                  className={`px-2.5 py-1 text-[10px] font-bold rounded-full cursor-pointer transition ${
+                                    post.published
+                                      ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/20"
+                                      : "bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/20"
+                                  }`}
+                                  title="Cliquez pour changer le statut"
+                                >
+                                  {post.published ? "Publié" : "Brouillon"}
+                                </button>
+                              </td>
+                              <td className="p-4">
+                                <div className="flex justify-center items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditBlog(post)}
+                                    className="p-1.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/10 rounded transition cursor-pointer"
+                                    title="Modifier l'article"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteBlogPost(post.id)}
+                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/10 rounded transition cursor-pointer"
+                                    title="Supprimer définitivement"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

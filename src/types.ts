@@ -139,6 +139,20 @@ export interface SaaSPlan {
 
 export type SupportedLanguage = "FR" | "EN" | "ES" | "AR" | "DE";
 
+export interface BlogPost {
+  id: string;
+  title: string;
+  slug: string;
+  summary: string;
+  content: string;
+  author: string;
+  date: string;
+  category: string;
+  readTime: string;
+  tags: string[];
+  published: boolean;
+}
+
 export interface TranslationDict {
   appName: string;
   tagline: string;

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { 
   ShieldCheck, LayoutDashboard, Terminal, CreditCard, Sparkles, 
   HelpCircle, Globe, Sun, Moon, Database, History, ArrowLeftRight, 
-  Settings, CheckCircle2, RefreshCw, Loader2, ArrowRight
+  Settings, CheckCircle2, RefreshCw, Loader2, ArrowRight, BookOpen
 } from "lucide-react";
 import { AuditReport, CriteriaCheck, SupportedLanguage } from "./types";
 import AdSenseCheckerForm from "./components/AdSenseCheckerForm.tsx";
@@ -11,6 +11,7 @@ import AIExplanation from "./components/AIExplanation.tsx";
 import APIDocs from "./components/APIDocs.tsx";
 import SaaSPricing from "./components/SaaSPricing.tsx";
 import AdminPanel from "./components/AdminPanel.tsx";
+import Blog from "./components/Blog.tsx";
 
 // Comprehensive Localization Tables
 const translations: Record<SupportedLanguage, any> = {
@@ -27,6 +28,7 @@ const translations: Record<SupportedLanguage, any> = {
       aiAssistant: "Assistant IA & Correcteur",
       apiPlayground: "API Playground",
       pricing: "Abonnements SaaS",
+      blog: "Blog & Guides SEO"
     }
   },
   EN: {
@@ -42,6 +44,7 @@ const translations: Record<SupportedLanguage, any> = {
       aiAssistant: "AI Assistant & Fixer",
       apiPlayground: "API Sandbox",
       pricing: "SaaS Plans",
+      blog: "Blog & Guides"
     }
   },
   ES: {
@@ -57,6 +60,7 @@ const translations: Record<SupportedLanguage, any> = {
       aiAssistant: "Asistente IA",
       apiPlayground: "Área de API",
       pricing: "Precios SaaS",
+      blog: "Blog y Guías"
     }
   },
   AR: {
@@ -69,9 +73,10 @@ const translations: Record<SupportedLanguage, any> = {
     adsenseChance: "احتمالية القبول",
     tabs: {
       dashboard: "لوحة الفحص",
-      aiAssistant: "مساعد الذكاء الاصطناعي",
+      aiAssistant: "مساعد الذkاء الاصطناعي",
       apiPlayground: "بيئة المطورين",
       pricing: "خطط الاشتراك",
+      blog: "المدونة والتعليمات"
     }
   },
   DE: {
@@ -87,6 +92,7 @@ const translations: Record<SupportedLanguage, any> = {
       aiAssistant: "KI-Assistent & Code",
       apiPlayground: "API-Sandbox",
       pricing: "SaaS-Pläne",
+      blog: "Blog & Leitfäden"
     }
   }
 };
@@ -94,7 +100,7 @@ const translations: Record<SupportedLanguage, any> = {
 export default function App() {
   const [lang, setLang] = useState<SupportedLanguage>("EN");
   const [theme, setTheme] = useState<"light" | "dark">("dark");
-  const [activeTab, setActiveTab] = useState<"dashboard" | "ai" | "api" | "pricing" | "admin">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "ai" | "api" | "pricing" | "admin" | "blog">("dashboard");
   const [userTier, setUserTier] = useState("Free Trial");
   const [config, setConfig] = useState<any>(null);
 
@@ -290,6 +296,18 @@ export default function App() {
                 <span>{currentTranslation.tabs.pricing}</span>
               </button>
             )}
+
+            <button
+              onClick={() => setActiveTab("blog")}
+              className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition flex items-center gap-1.5 ${
+                activeTab === "blog"
+                  ? "bg-white dark:bg-slate-900 text-slate-800 dark:text-white shadow"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-800"
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
+              <span>{currentTranslation.tabs.blog}</span>
+            </button>
           </nav>
 
           {/* Right Action Widgets (Theme, Locale, Tier status) */}
@@ -388,6 +406,16 @@ export default function App() {
             <span>SaaS</span>
           </button>
         )}
+
+        <button
+          onClick={() => setActiveTab("blog")}
+          className={`py-1.5 px-2 rounded-lg flex flex-col items-center gap-0.5 ${
+            activeTab === "blog" ? "bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold" : "text-slate-500"
+          }`}
+        >
+          <BookOpen className="w-4 h-4 text-indigo-500" />
+          <span>Blog</span>
+        </button>
 
         <button
           onClick={() => setActiveTab("admin")}
@@ -576,6 +604,10 @@ export default function App() {
                   lang={lang} 
                   config={config}
                 />
+              )}
+
+              {activeTab === "blog" && (
+                <Blog lang={lang} />
               )}
 
               {activeTab === "admin" && (
