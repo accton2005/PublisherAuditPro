@@ -1,0 +1,6 @@
+{
+  "name": "Publisher Audit Pro",
+  "description": "Advanced AI-powered Google AdSense eligibility checker, SEO structure auditor, technical security evaluator, and compliance policy generator.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
